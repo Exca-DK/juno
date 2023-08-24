@@ -114,9 +114,11 @@ type Server struct {
 	validator Validator
 	pool      *pool.Pool
 	log       utils.SimpleLogger
+	handler   requestHandler
 
 	// metrics
-	requests *prometheus.CounterVec
+	requests  *prometheus.CounterVec
+	durations *prometheus.HistogramVec
 }
 
 type Validator interface {
@@ -134,9 +136,15 @@ func NewServer(poolMaxGoroutines int, log utils.SimpleLogger) *Server {
 			Subsystem: "server",
 			Name:      "requests",
 		}, []string{"method"}),
+		durations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "rpc",
+			Subsystem: "server",
+			Name:      "requests_latency",
+			Buckets:   prometheus.DefBuckets,
+		}, []string{"method"}),
 	}
-
-	metrics.MustRegister(s.requests)
+	s.handler = s.handleRequest
+	metrics.MustRegister(s.requests, s.durations)
 	return s
 }
 
@@ -192,6 +200,13 @@ func (s *Server) Handle(ctx context.Context, data []byte) ([]byte, error) {
 // It returns the response in a byte array, only returns an
 // error if it can not create the response byte array
 func (s *Server) HandleReader(ctx context.Context, reader io.Reader) ([]byte, error) {
+	return s.handle(ctx, reader, s.handler)
+}
+
+// HandleReader processes a request to the server
+// It returns the response in a byte array, only returns an
+// error if it can not create the response byte array
+func (s *Server) handle(ctx context.Context, reader io.Reader, handler requestHandler) ([]byte, error) {
 	bufferedReader := bufio.NewReader(reader)
 	requestIsBatch := isBatch(bufferedReader)
 	res := &response{
@@ -205,7 +220,7 @@ func (s *Server) HandleReader(ctx context.Context, reader io.Reader) ([]byte, er
 		req := new(request)
 		if jsonErr := dec.Decode(req); jsonErr != nil {
 			res.Error = Err(InvalidJSON, jsonErr.Error())
-		} else if resObject, handleErr := s.handleRequest(ctx, req); handleErr != nil {
+		} else if resObject, handleErr := handler(ctx, req); handleErr != nil {
 			if !errors.Is(handleErr, ErrInvalidID) {
 				res.ID = req.ID
 			}
@@ -221,7 +236,7 @@ func (s *Server) HandleReader(ctx context.Context, reader io.Reader) ([]byte, er
 		} else if len(batchReq) == 0 {
 			res.Error = Err(InvalidRequest, "empty batch")
 		} else {
-			return s.handleBatchRequest(ctx, batchReq)
+			return s.handleBatchRequest(ctx, batchReq, handler)
 		}
 	}
 
@@ -231,7 +246,7 @@ func (s *Server) HandleReader(ctx context.Context, reader io.Reader) ([]byte, er
 	return json.Marshal(res)
 }
 
-func (s *Server) handleBatchRequest(ctx context.Context, batchReq []json.RawMessage) ([]byte, error) {
+func (s *Server) handleBatchRequest(ctx context.Context, batchReq []json.RawMessage, handler requestHandler) ([]byte, error) {
 	var (
 		responses []json.RawMessage
 		mutex     sync.Mutex
@@ -268,7 +283,7 @@ func (s *Server) handleBatchRequest(ctx context.Context, batchReq []json.RawMess
 		s.pool.Go(func() {
 			defer wg.Done()
 
-			resp, err := s.handleRequest(ctx, req)
+			resp, err := handler(ctx, req)
 			if err != nil {
 				resp = &response{
 					Version: "2.0",
@@ -346,7 +361,6 @@ func (s *Server) handleRequest(ctx context.Context, req *request) (*response, er
 		return res, nil
 	}
 
-	s.requests.WithLabelValues(req.Method).Inc()
 	tuple := reflect.ValueOf(calledMethod.Handler).Call(args)
 	if res.ID == nil { // notification
 		return nil, nil
@@ -486,4 +500,15 @@ func (s *Server) validateParam(param reflect.Value) error {
 	}
 
 	return nil
+}
+
+// TODO use actual reporter!
+func (s *Server) ReportRequestDuration(method string, duration time.Duration) {
+	s.durations.WithLabelValues(method).Observe(float64(duration.Milliseconds()))
+}
+
+func (s *Server) ReportRequestError(method string, errCode int) {}
+
+func (s *Server) ReportRequest(method string) {
+	s.requests.WithLabelValues(method).Inc()
 }
