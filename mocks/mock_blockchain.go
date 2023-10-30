@@ -70,6 +70,21 @@ func (mr *MockReaderMockRecorder) BlockByNumber(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockByNumber", reflect.TypeOf((*MockReader)(nil).BlockByNumber), arg0)
 }
 
+// BlockCommitmentsByNumber mocks base method.
+func (m *MockReader) BlockCommitmentsByNumber(arg0 uint64) (*core.BlockCommitments, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockCommitmentsByNumber", arg0)
+	ret0, _ := ret[0].(*core.BlockCommitments)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockCommitmentsByNumber indicates an expected call of BlockCommitmentsByNumber.
+func (mr *MockReaderMockRecorder) BlockCommitmentsByNumber(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockCommitmentsByNumber", reflect.TypeOf((*MockReader)(nil).BlockCommitmentsByNumber), arg0)
+}
+
 // BlockHeaderByHash mocks base method.
 func (m *MockReader) BlockHeaderByHash(arg0 *felt.Felt) (*core.Header, error) {
 	m.ctrl.T.Helper()
@@ -299,20 +314,6 @@ func (m *MockReader) StateUpdateByNumber(arg0 uint64) (*core.StateUpdate, error)
 func (mr *MockReaderMockRecorder) StateUpdateByNumber(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateUpdateByNumber", reflect.TypeOf((*MockReader)(nil).StateUpdateByNumber), arg0)
-}
-
-// SubscribeNewHeads mocks base method.
-func (m *MockReader) SubscribeNewHeads() blockchain.HeaderSubscription {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribeNewHeads")
-	ret0, _ := ret[0].(blockchain.HeaderSubscription)
-	return ret0
-}
-
-// SubscribeNewHeads indicates an expected call of SubscribeNewHeads.
-func (mr *MockReaderMockRecorder) SubscribeNewHeads() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeNewHeads", reflect.TypeOf((*MockReader)(nil).SubscribeNewHeads))
 }
 
 // TransactionByBlockNumberAndIndex mocks base method.

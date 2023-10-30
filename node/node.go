@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"reflect"
 	"runtime"
 	"time"
@@ -179,10 +178,7 @@ func New(cfg *Config, version string) (*Node, error) { //nolint:gocyclo,funlen
 	}
 
 	if cfg.P2P {
-		var privKeyStr string
-		privKeyStr, _ = os.LookupEnv("P2P_PRIVATE_KEY")
-		var p2pService *p2p.Service
-		p2pService, err = p2p.New(cfg.P2PAddr, "juno", cfg.P2PBootPeers, privKeyStr, cfg.Network, log)
+		p2pService, err := p2p.New(cfg.P2PAddr, "juno", cfg.P2PBootPeers, "", cfg.Network, log)
 		if err != nil {
 			return nil, fmt.Errorf("set up p2p service: %w", err)
 		}
@@ -238,7 +234,11 @@ func (n *Node) Run(ctx context.Context) {
 	}
 	n.log.Debugw(fmt.Sprintf("Running Juno with config:\n%s", string(yamlConfig)))
 
-	if err := migration.MigrateIfNeeded(n.db, n.cfg.Network, n.log); err != nil {
+	if err := migration.MigrateIfNeeded(ctx, n.db, n.cfg.Network, n.log); err != nil {
+		if errors.Is(err, context.Canceled) {
+			n.log.Infow("DB Migration cancelled")
+			return
+		}
 		n.log.Errorw("Error while migrating the DB", "err", err)
 		return
 	}
