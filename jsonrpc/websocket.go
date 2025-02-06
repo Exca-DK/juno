@@ -2,9 +2,11 @@ package jsonrpc
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/NethermindEth/juno/utils"
@@ -84,6 +86,12 @@ func (ws *Websocket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if _, err = io.Copy(io.Discard, wsc.r); err != nil {
 			break
 		}
+	}
+
+	// broken pipe || conn reset
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		ws.log.Infow("Websocket connection closed")
+		return
 	}
 
 	if status := websocket.CloseStatus(err); status != -1 {
